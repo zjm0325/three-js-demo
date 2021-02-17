@@ -2,12 +2,13 @@ import { Component, OnInit } from '@angular/core';
 
 import * as THREE from 'three';
 
-// import Stats from 'three/examples/jsm/libs/stats.module.js';
+import Stats from 'three/examples/jsm/libs/stats.module.js';
 
-// import { GUI } from 'three/examples/jsm/libs/dat.gui.module.js';
-// import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-// import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
-// import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { GUI } from 'three/examples/jsm/libs/dat.gui.module.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { ParallaxBarrierEffect } from 'three/examples/jsm/effects/ParallaxBarrierEffect.js';
 
 
 @Component({
@@ -16,190 +17,119 @@ import * as THREE from 'three';
 	styleUrls: ['./demo-one.component.less']
 })
 export class DemoOneComponent implements OnInit {
+	camera
+	scene
+	renderer
+	group
+	mouseX = 0
+	mouseY = 0
+	windowHalfX = window.innerWidth / 2;
+	windowHalfY = window.innerHeight / 2;
 
 	constructor() { }
 
 	ngOnInit() {
-		let camera, scene, renderer;
-		let plane;
-		let mouse, raycaster, isShiftDown = false;
+		this.init();
+		this.animate();
+	}
 
-		let rollOverMesh, rollOverMaterial;
-		let cubeGeo, cubeMaterial;
 
-		const objects = [];
+	init() {
+		this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 10000);
+		this.camera.position.z = 500;
+ 
+		this.scene = new THREE.Scene();
+		this.scene.background = new THREE.Color(0xffffff);
+		this.scene.fog = new THREE.Fog(0xffffff, 1, 10000);
 
-		init();
-		render();
+		const geometry = new THREE.BoxGeometry(100, 100, 100);
+		const material = new THREE.MeshNormalMaterial();
 
-		function init() {
+		this.group = new THREE.Group();
 
-			camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 10000);
-			camera.position.set(500, 800, 1300);
-			camera.lookAt(0, 0, 0);
+		for (let i = 0; i < 1000; i++) {
 
-			scene = new THREE.Scene();
-			scene.background = new THREE.Color(0xf0f0f0);
+			const mesh = new THREE.Mesh(geometry, material);
+			mesh.position.x = Math.random() * 2000 - 1000;
+			mesh.position.y = Math.random() * 2000 - 1000;
+			mesh.position.z = Math.random() * 2000 - 1000;
 
-			// roll-over helpers
+			mesh.rotation.x = Math.random() * 2 * Math.PI;
+			mesh.rotation.y = Math.random() * 2 * Math.PI;
 
-			const rollOverGeo = new THREE.BoxGeometry(50, 50, 50);
-			rollOverMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: 0.5, transparent: true });
-			rollOverMesh = new THREE.Mesh(rollOverGeo, rollOverMaterial);
-			scene.add(rollOverMesh);
+			mesh.matrixAutoUpdate = false;
+			mesh.updateMatrix();
 
-			// cubes
-
-			cubeGeo = new THREE.BoxGeometry(50, 50, 50);
-			cubeMaterial = new THREE.MeshLambertMaterial({ color: 0xfeb74c, map: new THREE.TextureLoader().load('textures/square-outline-textured.png') });
-
-			// grid
-
-			const gridHelper = new THREE.GridHelper(1000, 20);
-			scene.add(gridHelper);
-
-			//
-
-			raycaster = new THREE.Raycaster();
-			mouse = new THREE.Vector2();
-
-			const geometry = new THREE.PlaneGeometry(1000, 1000);
-			geometry.rotateX(- Math.PI / 2);
-
-			plane = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ visible: false }));
-			scene.add(plane);
-
-			objects.push(plane);
-
-			// lights
-
-			const ambientLight = new THREE.AmbientLight(0x606060);
-			scene.add(ambientLight);
-
-			const directionalLight = new THREE.DirectionalLight(0xffffff);
-			directionalLight.position.set(1, 0.75, 0.5).normalize();
-			scene.add(directionalLight);
-
-			renderer = new THREE.WebGLRenderer({ antialias: true });
-			renderer.setPixelRatio(window.devicePixelRatio);
-			renderer.setSize(window.innerWidth, window.innerHeight);
-			document.body.appendChild(renderer.domElement);
-
-			document.addEventListener('mousemove', onDocumentMouseMove);
-			document.addEventListener('mousedown', onDocumentMouseDown);
-			document.addEventListener('keydown', onDocumentKeyDown);
-			document.addEventListener('keyup', onDocumentKeyUp);
-
-			//
-
-			window.addEventListener('resize', onWindowResize);
+			this.group.add(mesh);
 
 		}
 
-		function onWindowResize() {
+		this.scene.add(this.group);
 
-			camera.aspect = window.innerWidth / window.innerHeight;
-			camera.updateProjectionMatrix();
+		this.renderer = new THREE.WebGLRenderer({ antialias: true });
+		this.renderer.setPixelRatio(window.devicePixelRatio);
+		this.renderer.setSize(window.innerWidth, window.innerHeight);
+		document.body.appendChild(this.renderer.domElement);
 
-			renderer.setSize(window.innerWidth, window.innerHeight);
+		// this.stats = new Stats();
+		// let stats = new Stats.Stats;
+		// document.body.appendChild(this.stats.dom);
 
-		}
 
-		function onDocumentMouseMove(event) {
+		document.addEventListener('mousemove', (event) => this.onDocumentMouseMove(event));
 
-			event.preventDefault();
-
-			mouse.set((event.clientX / window.innerWidth) * 2 - 1, - (event.clientY / window.innerHeight) * 2 + 1);
-
-			raycaster.setFromCamera(mouse, camera);
-
-			const intersects = raycaster.intersectObjects(objects);
-
-			if (intersects.length > 0) {
-
-				const intersect = intersects[0];
-
-				rollOverMesh.position.copy(intersect.point).add(intersect.face.normal);
-				rollOverMesh.position.divideScalar(50).floor().multiplyScalar(50).addScalar(25);
-
-			}
-
-			render();
-
-		}
-
-		function onDocumentMouseDown(event) {
-
-			event.preventDefault();
-
-			mouse.set((event.clientX / window.innerWidth) * 2 - 1, - (event.clientY / window.innerHeight) * 2 + 1);
-
-			raycaster.setFromCamera(mouse, camera);
-
-			const intersects = raycaster.intersectObjects(objects);
-
-			if (intersects.length > 0) {
-
-				const intersect = intersects[0];
-
-				// delete cube
-
-				if (isShiftDown) {
-
-					if (intersect.object !== plane) {
-
-						scene.remove(intersect.object);
-
-						objects.splice(objects.indexOf(intersect.object), 1);
-
-					}
-
-					// create cube
-
-				} else {
-
-					const voxel = new THREE.Mesh(cubeGeo, cubeMaterial);
-					voxel.position.copy(intersect.point).add(intersect.face.normal);
-					voxel.position.divideScalar(50).floor().multiplyScalar(50).addScalar(25);
-					scene.add(voxel);
-
-					objects.push(voxel);
-
-				}
-
-				render();
-
-			}
-
-		}
-
-		function onDocumentKeyDown(event) {
-
-			switch (event.keyCode) {
-
-				case 16: isShiftDown = true; break;
-
-			}
-
-		}
-
-		function onDocumentKeyUp(event) {
-
-			switch (event.keyCode) {
-
-				case 16: isShiftDown = false; break;
-
-			}
-
-		}
-
-		function render() {
-
-			renderer.render(scene, camera);
-
-		}
+		window.addEventListener('resize', () => this.onWindowResize());
 
 	}
 
+	onWindowResize() {
+
+		this.windowHalfX = window.innerWidth / 2;
+		this.windowHalfY = window.innerHeight / 2;
+
+		this.camera.aspect = window.innerWidth / window.innerHeight;
+		this.camera.updateProjectionMatrix();
+
+		this.renderer.setSize(window.innerWidth, window.innerHeight);
+
+	}
+
+	onDocumentMouseMove(event) {
+
+		this.mouseX = (event.clientX - this.windowHalfX) * 10;
+		this.mouseY = (event.clientY - this.windowHalfY) * 10;
+
+	}
+
+
+	animate() {
+
+		requestAnimationFrame(() => { this.animate() });
+
+		this.render();
+		// this.stats.update();
+
+	}
+
+	render() {
+
+		const time = Date.now() * 0.001;
+
+		const rx = Math.sin(time * 0.7) * 0.5,
+			ry = Math.sin(time * 0.3) * 0.5,
+			rz = Math.sin(time * 0.2) * 0.5;
+
+		this.camera.position.x += (this.mouseX - this.camera.position.x) * 0.05;
+		this.camera.position.y += (- this.mouseY - this.camera.position.y) * 0.05;
+
+		this.camera.lookAt(this.scene.position);
+
+		this.group.rotation.x = rx;
+		this.group.rotation.y = ry;
+		this.group.rotation.z = rz;
+
+		this.renderer.render(this.scene, this.camera);
+
+	}
 
 }
